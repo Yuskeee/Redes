@@ -5,7 +5,7 @@ import os
 import hashlib
 import random
 
-SERVER_IP='0.0.0.0'
+SERVER_IP='10.181.3.212'
 SERVER_PORT=6363
 
 class client:
@@ -29,13 +29,14 @@ class client:
         data, _ = self.server_socket.recvfrom(1024)
         total_size = struct.unpack('!Q', data)[0] #total_size = 13.
         bytes_length = -1
+        seq = -1
         #print(f"Tamanho total do arquivo: {total_size} bytes")
 
         with open(file_name, 'wb') as f:
             
-            while seq != total_size/bytes_length:
+            while seq != total_size/bytes_length - 1:
                 packet, _ = self.server_socket.recvfrom(1024) # 40 bytes do header(4 bytes seq, 4 bytes tam. pacote, 32 bytes hash) + 984 bytes dos dados do pacote
-                seq, bytes_length, hash = struct.unpack('!II32s', packet[:40])
+                new_seq, bytes_length, hash = struct.unpack('!II32s', packet[:40])
                 data = packet[40:]
                 
                 # Hash verification
@@ -44,8 +45,11 @@ class client:
                     print(f"Erro: Hash do pacote {seq} não confere.")
                     break
                     
+                if(seq+1 != new_seq):
+                    continue
                 f.write(data)
-                ack = struct.pack('!I', seq)
+                ack = struct.pack('!I', new_seq)
+                seq = new_seq
                 self.server_socket.sendto(ack, (self.host, self.port))
 
     def _debug_receive_file(self, file_name):
