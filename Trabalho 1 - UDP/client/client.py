@@ -4,6 +4,7 @@ import sys
 import os
 import hashlib
 import random
+import numpy as np
 
 SERVER_IP='10.181.3.212'
 SERVER_PORT=6363
@@ -27,16 +28,16 @@ class client:
 
     def _receive_file(self, file_name):
         data, _ = self.server_socket.recvfrom(1024)
-        total_size = struct.unpack('!Q', data)[0] #total_size = 13.
-        bytes_length = -1
+        total_size = struct.unpack('!Q', data)[0] 
+        bytes_length_packets = -1
         seq = -1
-        #print(f"Tamanho total do arquivo: {total_size} bytes")
 
         with open(file_name, 'wb') as f:
-            
-            while seq != total_size/bytes_length - 1:
-                packet, _ = self.server_socket.recvfrom(1024) # 40 bytes do header(4 bytes seq, 4 bytes tam. pacote, 32 bytes hash) + 984 bytes dos dados do pacote
+            while seq != int(np.ceil(total_size/bytes_length_packets) - 1):
+                packet, _ = self.server_socket.recvfrom(1024)  
                 new_seq, bytes_length, hash = struct.unpack('!II32s', packet[:40])
+            
+                bytes_length_packets = max(bytes_length_packets, bytes_length)
                 data = packet[40:]
                 
                 # Hash verification
@@ -45,30 +46,36 @@ class client:
                     print(f"Erro: Hash do pacote {seq} não confere.")
                     break
                     
-                if(seq+1 != new_seq):
-                    continue
-                f.write(data)
+                if seq+1 == new_seq:
+                    seq = new_seq
+                    f.write(data)
+
                 ack = struct.pack('!I', new_seq)
-                seq = new_seq
                 self.server_socket.sendto(ack, (self.host, self.port))
 
     def _debug_receive_file(self, file_name):
         data, _ = self.server_socket.recvfrom(1024)
-        total_size = struct.unpack('!Q', data)[0] #total_size = 13.
-        bytes_counter = 0
-        random_seq = random.randint(0, int(total_size/512) - 1) # Escolher um número aleatório entre 0 e total_size/8 - 1 para simular perda de pacotes
-        #print(f"Tamanho total do arquivo: {total_size} bytes")
+        total_size = struct.unpack('!Q', data)[0] 
+
+        bytes_length_packets = -1
+        seq = -1 # sorry. a qtd de pacotes é total_size/900
+        random_seq = random.randint(0, int(total_size/900) - 1)
+
+        print(random_seq)
 
         with open(file_name, 'wb') as f:
             
-            while bytes_counter < total_size:
-                packet, _ = self.server_socket.recvfrom(1024) # 40 bytes do header(4 bytes seq, 4 bytes tam. pacote, 32 bytes hash) + 984 bytes dos dados do pacote
-                seq, bytes_length, hash = struct.unpack('!II32s', packet[:40])
-                data = packet[40:40+bytes_length]
-
-                # Debugging: Descarta pacotes pares
-                if(seq == random_seq):
+            while seq != int(np.ceil(total_size/bytes_length_packets) - 1):
+                packet, _ = self.server_socket.recvfrom(1024)  
+                new_seq, bytes_length, hash = struct.unpack('!II32s', packet[:40])
+            
+                bytes_length_packets = max(bytes_length_packets, bytes_length)
+                data = packet[40:]
+                
+                # Debugging
+                if(new_seq == random_seq):
                     print(f"Simulando perda de pacote: {seq}")
+                    random_seq = -1
                     continue
                     
                 # Hash verification
@@ -76,12 +83,16 @@ class client:
                 if calculated_hash != hash:
                     print(f"Erro: Hash do pacote {seq} não confere.")
                     break
-                
-                f.write(data)
-                bytes_counter += bytes_length
-                ack = struct.pack('!I', seq)
+                    
+                if seq+1 == new_seq:
+                    seq = new_seq
+                    f.write(data)
 
+                ack = struct.pack('!I', new_seq)
                 self.server_socket.sendto(ack, (self.host, self.port))
+
+
+# acho que ajustei o debug=True bora testar com qual arquivo?
 
 def main():
     # Parse command line arguments

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Number of clients to start
-NUM_CLIENTS=10
+NUM_CLIENTS=5
 
 # Start clients in the background
 echo "[SCRIPT] Starting $NUM_CLIENTS clients..."
