@@ -5,7 +5,7 @@ import os
 import hashlib
 import random
 
-SERVER_IP='192.168.0.147'
+SERVER_IP='0.0.0.0'
 SERVER_PORT=6363
 
 class client:
@@ -28,13 +28,13 @@ class client:
     def _receive_file(self, file_name):
         data, _ = self.server_socket.recvfrom(1024)
         total_size = struct.unpack('!Q', data)[0] #total_size = 13.
-        bytes_counter = 0
+        bytes_length = -1
         #print(f"Tamanho total do arquivo: {total_size} bytes")
 
         with open(file_name, 'wb') as f:
             
-            while bytes_counter < total_size:
-                packet, _ = self.server_socket.recvfrom(1024) # 40 bytes do header(4 bytes seq, 4 bytes tam. pacote, 32 bytes hash) + 8 bytes dos dados do pacote
+            while seq != total_size/bytes_length:
+                packet, _ = self.server_socket.recvfrom(1024) # 40 bytes do header(4 bytes seq, 4 bytes tam. pacote, 32 bytes hash) + 984 bytes dos dados do pacote
                 seq, bytes_length, hash = struct.unpack('!II32s', packet[:40])
                 data = packet[40:]
                 
@@ -45,7 +45,6 @@ class client:
                     break
                     
                 f.write(data)
-                bytes_counter += bytes_length
                 ack = struct.pack('!I', seq)
                 self.server_socket.sendto(ack, (self.host, self.port))
 
@@ -59,7 +58,7 @@ class client:
         with open(file_name, 'wb') as f:
             
             while bytes_counter < total_size:
-                packet, _ = self.server_socket.recvfrom(1024) # 40 bytes do header(4 bytes seq, 4 bytes tam. pacote, 32 bytes hash) + 8 bytes dos dados do pacote
+                packet, _ = self.server_socket.recvfrom(1024) # 40 bytes do header(4 bytes seq, 4 bytes tam. pacote, 32 bytes hash) + 984 bytes dos dados do pacote
                 seq, bytes_length, hash = struct.unpack('!II32s', packet[:40])
                 data = packet[40:40+bytes_length]
 
