@@ -5,9 +5,11 @@ import os
 import hashlib
 import random
 import numpy as np
+import select
 
 SERVER_IP='10.181.3.212'
 SERVER_PORT=6363
+TIMEOUT = 5
 
 class client:
     def __init__(self, host=SERVER_IP, port=SERVER_PORT):
@@ -24,16 +26,29 @@ class client:
             self._debug_receive_file(file_name + ".received")
         else:
             self._receive_file(file_name + ".received")
-        print(f"Arquivo {file_name} recebido com sucesso.")
+        
 
     def _receive_file(self, file_name):
+        ready = select.select([self.server_socket], [], [], TIMEOUT)
+        if not ready[0]:
+            print("SERVER NOT FOUND!")
+            return
         data, _ = self.server_socket.recvfrom(1024)
-        total_size = struct.unpack('!Q', data)[0] 
+        message = struct.unpack('!Q', data)[0] 
+        message_str = message.to_bytes(8, 'big').decode('utf-8')
+        if(message_str == "NOTFOUND"):
+            print("Erro: Arquivo nâo encontrado!")
+            return
+        total_size = message
         bytes_length_packets = -1
         seq = -1
 
         with open(file_name, 'wb') as f:
             while seq != int(np.ceil(total_size/bytes_length_packets) - 1):
+                ready = select.select([self.server_socket], [], [], TIMEOUT)
+                if not ready[0]:
+                    print("SERVER IS DOWN!")
+                    return
                 packet, _ = self.server_socket.recvfrom(1024)  
                 new_seq, bytes_length, hash = struct.unpack('!II32s', packet[:40])
             
@@ -52,8 +67,14 @@ class client:
 
                 ack = struct.pack('!I', new_seq)
                 self.server_socket.sendto(ack, (self.host, self.port))
+        
+        print(f"Arquivo {file_name} recebido com sucesso.")
 
     def _debug_receive_file(self, file_name):
+        ready = select.select([self.server_socket], [], [], TIMEOUT)
+        if not ready[0]:
+            print("SERVER NOT FOUND!")
+            return
         data, _ = self.server_socket.recvfrom(1024)
         total_size = struct.unpack('!Q', data)[0] 
 
@@ -66,6 +87,10 @@ class client:
         with open(file_name, 'wb') as f:
             
             while seq != int(np.ceil(total_size/bytes_length_packets) - 1):
+                ready = select.select([self.server_socket], [], [], TIMEOUT)
+                if not ready[0]:
+                    print("SERVER IS DOWN!")
+                    return
                 packet, _ = self.server_socket.recvfrom(1024)  
                 new_seq, bytes_length, hash = struct.unpack('!II32s', packet[:40])
             
