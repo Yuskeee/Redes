@@ -56,7 +56,7 @@ class server:
             return False
         try:
             ack_seq = struct.unpack('!I', data[:4])[0]
-            return isinstance(ack_seq, int) and 0 <= ack_seq < 1_000_000_000
+            return isinstance(ack_seq, int) and 0 <= ack_seq
         except struct.error:
             return False
                  
@@ -74,6 +74,10 @@ class server:
 
    
     def send_file(self, file_path, client_address, ack_queue):
+        if not os.path.exists(file_path):
+            print(f"Arquivo {file_path} não encontrado.")
+            self.server_socket.sendto(b"NOTFOUND", client_address)
+            return
         file_size = os.path.getsize(file_path)
         self.server_socket.sendto(struct.pack('!Q', file_size), client_address)
         print(f"Arquivo {file_path} de {file_size} bytes enviado para {client_address}.")
