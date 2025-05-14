@@ -6,10 +6,10 @@ import threading
 import queue
 import time
 
-TIMEOUT = 0.3
+TIMEOUT = 1
 
 class server:
-    def __init__(self, host='0.0.0.0', port=6363):
+    def __init__(self, host='10.181.3.212', port=6363):
         self.host = host
         self.port = port
         self.running = True
@@ -76,11 +76,12 @@ class server:
     def send_file(self, file_path, client_address, ack_queue):
         file_size = os.path.getsize(file_path)
         self.server_socket.sendto(struct.pack('!Q', file_size), client_address)
+        print(f"Arquivo {file_path} de {file_size} bytes enviado para {client_address}.")
         
         seq = 0
         with open(file_path, 'rb') as f:
             while True:
-                file = f.read(800) # arquivo inteiro quebrado em pacotes de 200 bytes
+                file = f.read(900) # arquivo inteiro quebrado em pacotes de 200 bytes
                 if not file:
                     break
                     
