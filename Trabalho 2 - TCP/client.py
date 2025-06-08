@@ -115,7 +115,7 @@ class Client:
                 self.download_buffer.close()
             else:
                 # Se o buffer não contém todo o arquivo, continua recebendo
-                print(f"Recebido {self.download_buffer.tell() + len(content)} de {file_size} bytes do arquivo {file_name} ({(self.download_buffer.tell() + len(content))/file_size * 100:.2f}%).")
+                print(f"Recebido {self.download_buffer.tell()} de {file_size} bytes do arquivo {file_name} ({(self.download_buffer.tell())/file_size * 100:.2f}%).")
 
     def send(self, message):
         if self.running and message:
