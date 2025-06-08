@@ -4,6 +4,37 @@ import threading
 import time
 import sys
 
+""""
+Protocolo de aplicação sugerido pelos alunos:
+
+- Conexão TCP/IP
+
+Cada mensagem deve ser precedida do seguinte cabeçalho:
+
+No caso de uma mensagem de arquivo, o cabeçalho deve ser:
++---------------------------+
+| Tipo da msg               |
++---------------------------+
+| Tamanho em bytes do nome  |
++---------------------------+
+| Nome do arquivo           |
++---------------------------+
+| Tamanho total do arquivo  |
++---------------------------+
+| Conteúdo da msg           |
+
+No caso de uma mensagem de texto, o cabeçalho deve ser:
++---------------------------+
+| Tipo da msg               |
++---------------------------+
+| Conteúdo da msg           |
+
+Onde:
+- Tipo da msg: um byte que indica o tipo da mensagem (0 para texto para buffer CLI, 1 para arquivo)
+- Tamanho da msg: um valor binario representando o tamanho da mensagem em bytes
+- Conteúdo da msg: o conteúdo da mensagem, que pode ser texto ou dados de arquivo
+"""
+
 class Server:
     def __init__(self, host='localhost', port=6363):
         self.host = host
@@ -35,7 +66,7 @@ class Server:
                 with self.lock:
                     for sock in self.client_sockets:
                         try:
-                            sock.sendall(msg.encode())
+                            self.send_message(type=0, content=msg, client_socket=sock)
                         except Exception as e:
                             print(f"Erro ao enviar mensagem para o cliente: {e}")
 
@@ -53,12 +84,25 @@ class Server:
             print(f"Operação 'Arquivo' com arquivo: {filename}")
             try:
                 with open(filename, 'rb') as f:
-                    data = f.read()
-                    client_socket.sendall(data)
+                    file_size = os.path.getsize(filename)
+                    print(f"Tamanho do arquivo: {file_size} bytes")
+                    current_size = 0
+                    header_size = 1 + len(filename) + 4 + 1
+                    counter = 0
+                    while current_size < file_size:
+                        data = f.read(1024 - header_size)
+                        while counter < 10:
+                            print("data: ", data)
+                            print(len(data))
+                            counter += 1
+                        current_size += len(data)
+                        self.send_message(1, data, filename, file_size, client_socket=client_socket)
+                    # client_socket.sendall(data)
                     print(f"Arquivo {filename} enviado para o cliente.")
             except FileNotFoundError:
                 print(f"Arquivo {filename} não encontrado.")
                 client_socket.sendall(b"Arquivo nao encontrado.")
+                
         elif message.startswith("chat "):
             chat_message = message.split(" ", 1)[1]
             print(f"Operação 'Chat' com mensagem: {chat_message}")
@@ -66,13 +110,33 @@ class Server:
                 for sock in self.client_sockets:
                     if sock != client_socket:
                         try:
-                            sock.sendall(chat_message.encode())
+                            # sock.sendall(chat_message.encode())
+                            self.send_message(type=0, content=chat_message, client_socket=sock)
                         except Exception as e:
                             print(f"Erro ao enviar mensagem para o cliente: {e}")
         else:
             print(f"Operação desconhecida: {message}")
             client_socket.sendall(b"Operacao desconhecida.")
 
+    def send_message(self, type =0, content=b"", filename="", file_size=0, client_socket=None):
+        if type == 0:
+            header = f"0"
+            message = header.encode() + content.encode()
+        elif type == 1:
+            # file_size deve ser convertido para um inteiro de 4 bytes
+            len_filename_b = len(filename).to_bytes(1, 'big', signed=False)  # Tamanho do nome do arquivo como um byte
+            file_size_b = file_size.to_bytes(4, 'big', signed=False)
+            message = f"1".encode() + len_filename_b + filename.encode() + file_size_b + content
+        else:
+            print("Tipo de mensagem desconhecido.")
+            return
+        if client_socket:
+            try:
+                client_socket.sendall(message)
+                # print(f"Mensagem enviada: {message.decode()}")
+            except Exception as e:
+                print(f"Erro ao enviar mensagem: {e}")
+                # pass
 
     def handle_client(self, client_socket):
         while self.running:
