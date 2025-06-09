@@ -44,6 +44,15 @@ class Client:
         self.download_buffer = io.BytesIO()  # Buffer para armazenar dados recebidos de arquivos
         self.is_downloading = False  # Flag para indicar se está baixando um arquivo
 
+    def recv_exact(self, num_bytes):
+        buf = b""
+        while len(buf) < num_bytes:
+            part = self.socket.recv(num_bytes - len(buf))
+            if not part:
+                raise ConnectionError("Conexao fechada inesperadamente")
+            buf += part
+        return buf
+
     def connect(self):
         try:
             self.socket.connect((self.host, self.port))
@@ -58,11 +67,6 @@ class Client:
     def _receive_messages(self):
         while self.running:
             try:
-                # data = self.socket.recv(1024)
-                # if not data:
-                #     print("Servidor encerrou a conexao.")
-                #     break
-                # print(data.decode(), end="\n")
                 self.handle_data() # Rotina para tratar a mensagem recebida
             except Exception as e:
                 if self.running:
@@ -72,7 +76,7 @@ class Client:
 
     def handle_data(self):
         # Extrai informações do cabeçalho
-        message_type = self.socket.recv(1).decode()
+        message_type = self.recv_exact(1).decode()
         if message_type == '0':
             # Mensagem de texto
             content = self.socket.recv(1024-1).decode()
@@ -81,21 +85,21 @@ class Client:
             
         elif message_type == '1': 
             # Tamanho em bytes do nome do arquivo
-            file_name_length = int.from_bytes(self.socket.recv(1), 'big')  # Recebe o tamanho do nome do arquivo como um inteiro de 1 byte
+            file_name_length = int.from_bytes(self.recv_exact(1), 'big')  # Recebe o tamanho do nome do arquivo como um inteiro de 1 byte
             if file_name_length <= 0:
                 print("Tamanho do nome do arquivo inválido.")
                 return
             # Nome do arquivo
-            file_name = self.socket.recv(file_name_length).decode()  # Recebe o nome do arquivo
+            file_name = self.recv_exact(file_name_length).decode()  # Recebe o nome do arquivo
             if not file_name:
                 print("Nome do arquivo vazio.")
                 return
-            file_size = int.from_bytes(self.socket.recv(4), 'big')  # Recebe o tamanho do arquivo como um inteiro de 4 bytes
+            file_size = int.from_bytes(self.recv_exact(4), 'big')  # Recebe o tamanho do arquivo como um inteiro de 4 bytes
             print(f"Recebendo arquivo: {file_name} ({file_size} bytes)")
-            content = self.socket.recv(1024 - file_name_length - 6)  # Recebe o conteúdo do arquivo, descontando o tamanho do nome e do tamanho do arquivo
-            # print("content: ", content)
-            # print(len(content))
-
+            
+            chunk_size = min(file_size - self.download_buffer.tell(), 1024-file_name_length-6)
+            content = self.recv_exact(chunk_size)  # Recebe o conteúdo do arquivo, descontando o tamanho do nome e do tamanho do arquivo
+            
             if not content:
                 print(f"Arquivo {file_name} vazio ou não recebido.")
                 return
@@ -103,6 +107,7 @@ class Client:
             if not self.is_downloading:
                 self.is_downloading = True
                 self.download_buffer = io.BytesIO()
+
             # Adiciona o conteúdo ao buffer de download
             self.download_buffer.write(content)
             # Verifica se o tamanho do buffer é igual ao tamanho do arquivo

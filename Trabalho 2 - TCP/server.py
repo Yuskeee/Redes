@@ -88,16 +88,12 @@ class Server:
                     print(f"Tamanho do arquivo: {file_size} bytes")
                     current_size = 0
                     header_size = 1 + len(filename) + 4 + 1
-                    counter = 0
-                    while current_size < file_size:
+                    counter = -1
+                    while current_size != file_size:
+                        counter += 1
                         data = f.read(1024 - header_size)
-                        while counter < 10:
-                            print("data: ", data)
-                            print(len(data))
-                            counter += 1
                         current_size += len(data)
                         self.send_message(1, data, filename, file_size, client_socket=client_socket)
-                    # client_socket.sendall(data)
                     print(f"Arquivo {filename} enviado para o cliente.")
             except FileNotFoundError:
                 print(f"Arquivo {filename} não encontrado.")
