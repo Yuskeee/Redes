@@ -3,6 +3,7 @@ import os
 import threading
 import time
 import sys
+import hashlib
 
 """"
 Protocolo de aplicação sugerido pelos alunos:
@@ -88,16 +89,19 @@ class Server:
                     print(f"Tamanho do arquivo: {file_size} bytes")
                     current_size = 0
                     header_size = 1 + len(filename) + 4 + 1
-                    counter = -1
+                    full_content = b''
                     while current_size != file_size:
-                        counter += 1
                         data = f.read(1024 - header_size)
+                        full_content += data
                         current_size += len(data)
                         self.send_message(1, data, filename, file_size, client_socket=client_socket)
+                    filehash = hashlib.sha256()  
+                    filehash.update(full_content)
+                    client_socket.sendall(filehash.digest())
                     print(f"Arquivo {filename} enviado para o cliente.")
             except FileNotFoundError:
                 print(f"Arquivo {filename} não encontrado.")
-                client_socket.sendall(b"Arquivo nao encontrado.")
+                client_socket.sendall(b"0Arquivo nao encontrado.")
                 
         elif message.startswith("chat "):
             chat_message = message.split(" ", 1)[1]
@@ -112,7 +116,7 @@ class Server:
                             print(f"Erro ao enviar mensagem para o cliente: {e}")
         else:
             print(f"Operação desconhecida: {message}")
-            client_socket.sendall(b"Operacao desconhecida.")
+            client_socket.sendall(b"0Operacao desconhecida.")
 
     def send_message(self, type =0, content=b"", filename="", file_size=0, client_socket=None):
         if type == 0:

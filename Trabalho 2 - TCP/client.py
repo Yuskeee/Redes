@@ -2,6 +2,8 @@ import socket
 import threading
 import sys
 import io
+import hashlib
+
 
 """"
 Protocolo de aplicação sugerido pelos alunos:
@@ -42,6 +44,7 @@ class Client:
         self.running = False
         self.receive_thread = None
         self.download_buffer = io.BytesIO()  # Buffer para armazenar dados recebidos de arquivos
+        self.hash_buffer = hashlib.sha256()
         self.is_downloading = False  # Flag para indicar se está baixando um arquivo
 
     def recv_exact(self, num_bytes):
@@ -74,53 +77,75 @@ class Client:
                 break
         self.stop()
 
+    def save_file(self, file_name):
+        with open(f"{file_name}.received", 'wb') as f:
+            f.write(self.download_buffer.getvalue())
+
+        computed_hash = hashlib.sha256()
+        computed_hash.update(self.download_buffer.getvalue())
+        computed_hash = computed_hash.digest()        
+
+        print(f"Arquivo {file_name} recebido com sucesso.")
+
+        received_hash = self.recv_exact(32)         
+        if received_hash == computed_hash:
+            print("NOT CORRUPTED FILE")
+        else:
+            print("CORRUPTED FILE")
+
+        self.is_downloading = False
+        self.download_buffer.close()
+        self.download_buffer = io.BytesIO()
+
+    def get_header(self):
+        file_name_length = int.from_bytes(self.recv_exact(1), 'big')  # Recebe o tamanho do nome do arquivo como um inteiro de 1 byte
+        if file_name_length <= 0:
+            print("Tamanho do nome do arquivo inválido.")
+            return
+       
+        file_name = self.recv_exact(file_name_length).decode()  # Recebe o nome do arquivo
+        if not file_name:
+            print("Nome do arquivo vazio.")
+            return
+
+        file_size = int.from_bytes(self.recv_exact(4), 'big')  # Recebe o tamanho do arquivo como um inteiro de 4 bytes
+        print(f"Recebendo arquivo: {file_name} ({file_size} bytes)")
+        
+        return file_name_length, file_name, file_size
+        
+
+    def receive_file(self):
+        file_name_length, file_name, file_size = self.get_header()
+        
+        content_size = min(file_size - self.download_buffer.tell(), 1024-file_name_length-6)
+        content = self.recv_exact(content_size) 
+        
+        if not content:
+            print(f"Arquivo {file_name} vazio ou não recebido.")
+            return
+
+        if not self.is_downloading:
+            self.is_downloading = True
+            self.download_buffer = io.BytesIO()
+
+        self.download_buffer.write(content)  # Adiciona o conteúdo ao buffer de download
+       
+        if self.download_buffer.tell() >= file_size:     # Se o buffer contém todo o arquivo, salva em disco
+            self.save_file(file_name)
+        else:
+            print(f"Recebido {self.download_buffer.tell()} de {file_size} bytes do arquivo {file_name} ({(self.download_buffer.tell())/file_size * 100:.2f}%).")
+    
+
     def handle_data(self):
-        # Extrai informações do cabeçalho
         message_type = self.recv_exact(1).decode()
         if message_type == '0':
-            # Mensagem de texto
             content = self.socket.recv(1024-1).decode()
             if content:
                 print(f"Mensagem recebida: {content}")
             
         elif message_type == '1': 
-            # Tamanho em bytes do nome do arquivo
-            file_name_length = int.from_bytes(self.recv_exact(1), 'big')  # Recebe o tamanho do nome do arquivo como um inteiro de 1 byte
-            if file_name_length <= 0:
-                print("Tamanho do nome do arquivo inválido.")
-                return
-            # Nome do arquivo
-            file_name = self.recv_exact(file_name_length).decode()  # Recebe o nome do arquivo
-            if not file_name:
-                print("Nome do arquivo vazio.")
-                return
-            file_size = int.from_bytes(self.recv_exact(4), 'big')  # Recebe o tamanho do arquivo como um inteiro de 4 bytes
-            print(f"Recebendo arquivo: {file_name} ({file_size} bytes)")
-            
-            chunk_size = min(file_size - self.download_buffer.tell(), 1024-file_name_length-6)
-            content = self.recv_exact(chunk_size)  # Recebe o conteúdo do arquivo, descontando o tamanho do nome e do tamanho do arquivo
-            
-            if not content:
-                print(f"Arquivo {file_name} vazio ou não recebido.")
-                return
-            # Verifica se o arquivo já está sendo baixado
-            if not self.is_downloading:
-                self.is_downloading = True
-                self.download_buffer = io.BytesIO()
-
-            # Adiciona o conteúdo ao buffer de download
-            self.download_buffer.write(content)
-            # Verifica se o tamanho do buffer é igual ao tamanho do arquivo
-            if self.download_buffer.tell() >= file_size:    
-                # Se o buffer contém todo o arquivo, salva em disco
-                with open(f"{file_name}.received", 'wb') as f:
-                    f.write(self.download_buffer.getvalue())
-                print(f"Arquivo {file_name} recebido com sucesso.")
-                self.is_downloading = False
-                self.download_buffer.close()
-            else:
-                # Se o buffer não contém todo o arquivo, continua recebendo
-                print(f"Recebido {self.download_buffer.tell()} de {file_size} bytes do arquivo {file_name} ({(self.download_buffer.tell())/file_size * 100:.2f}%).")
+            self.receive_file()
+           
 
     def send(self, message):
         if self.running and message:
