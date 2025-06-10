@@ -171,7 +171,10 @@ class Server:
         os._exit(0)
 
 if __name__ == "__main__":
-    server = Server()
+    # Get network IP address
+    network_ip = socket.gethostbyname(socket.gethostname())
+    print(f"IP local do servidor: {network_ip}")
+    server = Server(host=network_ip, port=6363)
     try:
         server.start()
     except KeyboardInterrupt:
